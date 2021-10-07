@@ -4,17 +4,19 @@ import com.wrapper.spotify.SpotifyApi;
 import com.wrapper.spotify.SpotifyHttpManager;
 import com.wrapper.spotify.exceptions.SpotifyWebApiException;
 import com.wrapper.spotify.model_objects.credentials.AuthorizationCodeCredentials;
-import com.wrapper.spotify.model_objects.specification.User;
+import com.wrapper.spotify.model_objects.specification.*;
 import com.wrapper.spotify.requests.authorization.authorization_code.AuthorizationCodeRefreshRequest;
 import com.wrapper.spotify.requests.authorization.authorization_code.AuthorizationCodeRequest;
 import com.wrapper.spotify.requests.authorization.authorization_code.AuthorizationCodeUriRequest;
+import com.wrapper.spotify.requests.data.library.GetUsersSavedTracksRequest;
+import com.wrapper.spotify.requests.data.playlists.GetListOfCurrentUsersPlaylistsRequest;
 import com.wrapper.spotify.requests.data.users_profile.GetCurrentUsersProfileRequest;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import com.wrapper.spotify.requests.data.search.simplified.SearchTracksRequest;
+
+import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.net.URI;
@@ -23,7 +25,9 @@ import java.util.Date;
 @RestController
 public class SpotifyConnect {
 //    String clientAppCallbackUrl = "http://localhost:8090/callback/";
-    String clientAppCallbackUrl = "http://localhost:3000/callback/";
+//    String clientAppCallbackUrl = "http://localhost:3000/callback/";
+    String clientAppCallbackUrl = "https://jamplayer.herokuapp.com/callback/";
+
     private static final String clientId = System.getenv("SPOTIFY_CLIENT_ID");
     private static final String clientSecret = System.getenv("SPOTIFY_CLIENT_SECRET");
     private static final String spotifyRedirectUri = System.getenv("SPOTIFY_REDIRECT_URI");
@@ -36,7 +40,7 @@ public class SpotifyConnect {
             .build();
     //          .state("x4xkmn9pu3j6ukrs8n")
     private static final AuthorizationCodeUriRequest authorizationCodeUriRequest = spotifyApi.authorizationCodeUri()
-            .scope("user-read-birthdate,user-read-email")
+            .scope("user-read-birthdate,user-read-email,user-library-read")
 //            .show_dialog(true)
             .build();
 
@@ -96,7 +100,6 @@ public class SpotifyConnect {
             spotifyApi.setRefreshToken(authorizationCodeCredentials.getRefreshToken());
 
             timestampTimer = currentDate.getTime() + (1000 * authorizationCodeCredentials.getExpiresIn());
-
 //            System.out.println("Expires in: " + authorizationCodeCredentials.getExpiresIn());
         } catch (IOException | SpotifyWebApiException e) {
 //            System.out.println("Error: " + e.getMessage());
@@ -130,4 +133,49 @@ public class SpotifyConnect {
         }
     }
 
+    @CrossOrigin(origins = "*")
+    @RequestMapping("/search")
+    public Track[] searchSongs(@RequestParam("searchBox") String q){
+        final SearchTracksRequest searchTracksRequest = spotifyApi.searchTracks(q).build();
+        try {
+            final Paging<Track> trackPaging = searchTracksRequest.execute();
+            return trackPaging.getItems();
+        } catch (IOException | SpotifyWebApiException e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+        return new Track[0];
+    }
+
+    @CrossOrigin(origins = "*")
+    @RequestMapping("/playlists")
+    public PlaylistSimplified[] userPlaylists(){
+        final GetListOfCurrentUsersPlaylistsRequest getListOfCurrentUsersPlaylistsRequest = spotifyApi.getListOfCurrentUsersPlaylists().build();
+        try {
+            final Paging<PlaylistSimplified> playlistSimplifiedPaging = getListOfCurrentUsersPlaylistsRequest.execute();
+
+            return playlistSimplifiedPaging.getItems();
+        } catch (IOException | SpotifyWebApiException e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+        return new PlaylistSimplified[0];
+    }
+
+    @CrossOrigin(origins = "*")
+    @RequestMapping("/collection")
+    public Track[] userCollection(){
+        final GetUsersSavedTracksRequest getUsersSavedTracksRequest = spotifyApi.getUsersSavedTracks().build();
+        try {
+            final Paging<SavedTrack> savedTrackPaging = getUsersSavedTracksRequest.execute();
+            int total = savedTrackPaging.getLimit();
+            Track[] savedSongs = new Track[total];
+            SavedTrack[] songsList = savedTrackPaging.getItems();
+            for (int i = 0; i < total; i++) {
+                savedSongs[i] = songsList[i].getTrack();
+            }
+            return savedSongs;
+        } catch (IOException | SpotifyWebApiException e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+        return new Track[0];
+    }
 }
